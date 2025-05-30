@@ -1,0 +1,90 @@
+&spi4 {
+	status = "okay";
+	cs-gpios = <&gpio0 25 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&spi4_default>;
+	sdhc0: sdhc@0 {
+			compatible = "zephyr,sdhc-spi-slot";
+			reg = <0>;
+			status = "okay";
+			mmc {
+				compatible = "zephyr,sdmmc-disk";
+				status = "okay";
+			};
+			spi-max-frequency = <8000000>;
+	};
+};
+
+&spi4_default {
+	group1 {
+		psels = <NRF_PSEL(SPIM_SCK, 0, 24)>,
+				<NRF_PSEL(SPIM_MISO, 0, 23)>,
+				<NRF_PSEL(SPIM_MOSI, 0, 22)>;
+	};
+};
+
+&adc {
+	status = "disabled";
+};
+
+&pwm0 {
+	status = "disabled";
+};
+
+&qspi {
+	status = "disabled";
+};
+
+&uart0 {
+	status = "disabled";
+};
+
+&i2c1 {
+	status = "disabled";
+};
+
+// &button0 {
+// 	/delete-property/ gpios;
+// };
+
+// &button1 {
+// 	/delete-property/ gpios;
+// };
+
+
+/ {
+    aliases {
+        test = &i2s0;
+    };
+};
+
+// / {
+//     data_partition: partition@0 {
+//         label = "data_part";
+//         reg = <0x00040000 0x0000EA00>; // adjust to your flash address/size
+//     };
+// };
+
+&clock {
+	hfclkaudio-frequency = <11289600>;
+};
+
+&i2s0 {
+    status = "okay";
+    pinctrl-0 = <&i2s0_default>;
+    pinctrl-names = "default";
+	clock-source = "ACLK";
+};
+
+&pinctrl {
+    compatible = "nordic,nrf-pinctrl";   /* ensure the nRF pinctrl driver binds */
+    i2s0_default: i2s0_default {
+        group {
+            /* whitespace‑separated entries, no commas */
+            psels = <NRF_PSEL(I2S_SCK_M, 1, 15)>,
+                    <NRF_PSEL(I2S_LRCK_M,  1, 12)>,
+                    <NRF_PSEL(I2S_SDOUT,   1, 13)>;
+        };
+    };
+};
+
+

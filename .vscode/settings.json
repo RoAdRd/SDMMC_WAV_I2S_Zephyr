@@ -1,0 +1,5 @@
+{
+    "nrf-connect.applications": [
+        "/opt/nordic/ncs/v2.9.0/zephyr/samples/UH/sd_I2S"
+    ]
+}
