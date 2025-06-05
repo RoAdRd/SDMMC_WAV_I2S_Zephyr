@@ -50,8 +50,9 @@ static STRUCT_SECTION_ITERABLE(k_mem_slab, tx_0_mem_slab) =
 
 #define WAV_FILENAME "test.wav" 
 
-typedef struct __attribute__((packed)) {    // make sure the WAV file is in the same format as the struct, for converting file to WAV follow this website https://www.freeconvert.com/mp3-to-wav.
-    char     RIFF[4];        
+typedef struct __attribute__((packed)) {    /* Make sure the WAV file is in the same format as the struct, 
+for converting file to WAV follow this website https://www.freeconvert.com/mp3-to-wav. */
+    char     RIFF[4];         
     uint32_t chunkSize;      
     char     WAVE[4];        
     char     fmt_[4];        
