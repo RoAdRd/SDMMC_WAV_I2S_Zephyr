@@ -1,31 +1,24 @@
-/*
- * Zephyr WAV Player from SD Card via I2S
- *
- * Based on NXP I2S example and Zephyr SD Card sample.
- * SPDX-License-Identifier: Apache-2.0
- */
-
 #include <stdio.h>
 #include <string.h>
-#include <inttypes.h> /* PRIu32, PRIu64 */
+#include <inttypes.h> 
 
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/i2s.h>
 #include <zephyr/storage/disk_access.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/fs/fs.h>
-#include <zephyr/sys/byteorder.h> // For sys_le32_to_cpu etc.
+#include <zephyr/sys/byteorder.h> 
 
 #if defined(CONFIG_FAT_FILESYSTEM_ELM)
 #include <ff.h>
 #define DISK_DRIVE_NAME  "SD"
 #define DISK_MOUNT_PT    "/" DISK_DRIVE_NAME ":"
-#define MOUNT_POINT      DISK_MOUNT_PT /* <--- THIS WAS THE MISSING DEFINITION */
+#define MOUNT_POINT      DISK_MOUNT_PT 
 static FATFS fat_fs;
 static struct fs_mount_t mp = {
     .type     = FS_FATFS,
     .fs_data  = &fat_fs,
-    .mnt_point= NULL, /* set at runtime */
+    .mnt_point= NULL, 
 };
 #else
 #error "Enable CONFIG_FAT_FILESYSTEM_ELM for SD card support"
@@ -33,23 +26,21 @@ static struct fs_mount_t mp = {
 
 LOG_MODULE_REGISTER(wav_player_app, CONFIG_LOG_DEFAULT_LEVEL);
 
-// --- I2S Configuration ---
-#define I2S_SAMPLES_PER_BLOCK   64 // Number of sample frames (e.g., L/R pairs for stereo) in one I2S block
+#define I2S_SAMPLES_PER_BLOCK   64 
 
-// For the memory slab, we need a fixed max size. Let's assume max 2 channels, 16-bit.
+
 #define MAX_I2S_CHANNELS        2
-#define MAX_I2S_SAMPLE_BYTES    2 // 16-bit (2 bytes per sample value)
-#define I2S_MAX_BLOCK_SIZE_BYTES (I2S_SAMPLES_PER_BLOCK * MAX_I2S_CHANNELS * MAX_I2S_SAMPLE_BYTES) // e.g. 64*2*2 = 256 bytes
+#define MAX_I2S_SAMPLE_BYTES    2 // 2Bytes per sample value
+#define I2S_MAX_BLOCK_SIZE_BYTES (I2S_SAMPLES_PER_BLOCK * MAX_I2S_CHANNELS * MAX_I2S_SAMPLE_BYTES) //  256 bytes
 
-#define NUM_I2S_BLOCKS 20 // Number of DMA blocks in the slab
+#define NUM_I2S_BLOCKS 20 
 
 #ifdef CONFIG_NOCACHE_MEMORY
     #define MEM_SLAB_CACHE_ATTR __nocache
 #else
     #define MEM_SLAB_CACHE_ATTR
-#endif /* CONFIG_NOCACHE_MEMORY */
+#endif 
 
-// Memory slab for I2S transmit buffers
 static char MEM_SLAB_CACHE_ATTR __aligned(WB_UP(32))
     _k_mem_slab_buf_tx_0_mem_slab[(NUM_I2S_BLOCKS) * WB_UP(I2S_MAX_BLOCK_SIZE_BYTES)];
 
@@ -57,33 +48,29 @@ static STRUCT_SECTION_ITERABLE(k_mem_slab, tx_0_mem_slab) =
     Z_MEM_SLAB_INITIALIZER(tx_0_mem_slab, _k_mem_slab_buf_tx_0_mem_slab,
                            WB_UP(I2S_MAX_BLOCK_SIZE_BYTES), NUM_I2S_BLOCKS);
 
-// --- WAV File Configuration ---
-#define WAV_FILENAME "test.wav" // The WAV file to play
+#define WAV_FILENAME "test.wav" 
 
-// --- WAV Header Structure (ensure packing if compiler adds padding) ---
-typedef struct __attribute__((packed)) {
-    char     RIFF[4];        // "RIFF"
-    uint32_t chunkSize;      // File size - 8 (little-endian)
-    char     WAVE[4];        // "WAVE"
-    // "fmt " subchunk
-    char     fmt_[4];        // "fmt "
-    uint32_t fmtChunkSize;   // Size of fmt chunk (little-endian) (16 for PCM)
-    uint16_t audioFormat;    // Audio format (little-endian) (1 for PCM)
-    uint16_t numChannels;    // Number of channels (little-endian)
-    uint32_t sampleRate;     // Sample rate (little-endian)
-    uint32_t byteRate;       // sampleRate * numChannels * bitsPerSample/8 (little-endian)
-    uint16_t blockAlign;     // numChannels * bitsPerSample/8 (little-endian)
-    uint16_t bitsPerSample;  // Bits per sample (little-endian)
+typedef struct __attribute__((packed)) {    // make sure the WAV file is in the same format as the struct, for converting file to WAV follow this website https://www.freeconvert.com/mp3-to-wav.
+    char     RIFF[4];        
+    uint32_t chunkSize;      
+    char     WAVE[4];        
+    char     fmt_[4];        
+    uint32_t fmtChunkSize;   
+    uint16_t audioFormat;    
+    uint16_t numChannels;    
+    uint32_t sampleRate;     
+    uint32_t byteRate;       
+    uint16_t blockAlign;     
+    uint16_t bitsPerSample;  
 } WavHeaderBase;
 
 typedef struct __attribute__((packed)) {
     char     chunkID[4];
-    uint32_t chunkSize; // little-endian
+    uint32_t chunkSize; 
 } WavChunkHeader;
 
 
-// --- SD Card Mounting Function (from Zephyr sample) ---
-static int mount_sd(const char *mount_pt_arg) // Renamed arg to avoid conflict if MOUNT_POINT was global
+static int mount_sd(const char *mount_pt_arg) 
 {
     int rc;
     static bool inited;
@@ -97,7 +84,7 @@ static int mount_sd(const char *mount_pt_arg) // Renamed arg to avoid conflict i
         inited = true;
     }
 
-    mp.mnt_point = mount_pt_arg; // Use the argument here
+    mp.mnt_point = mount_pt_arg; 
     rc = fs_mount(&mp);
     if (rc != FR_OK) {
         LOG_ERR("fs_mount(%s) error: %d (FR_OK is %d)", mount_pt_arg, rc, FR_OK);
@@ -127,23 +114,21 @@ int main(void)
     uint32_t wav_data_chunk_size;
     size_t i2s_actual_block_size_bytes;
 
-    LOG_INF("=== WAV Player from SD Card ===");
+    LOG_INF("Initalizing");
 
     if (!device_is_ready(dev_i2s)) {
         LOG_ERR("I2S device %s not ready", dev_i2s->name);
         return -ENODEV;
     }
 
-    // 1. Mount SD Card
-    rc = mount_sd(MOUNT_POINT); // Use the defined MOUNT_POINT
+    rc = mount_sd(MOUNT_POINT); 
     if (rc != 0) {
         LOG_ERR("Failed to mount SD card: %d", rc);
         return rc;
     }
 
-    // 2. Construct file path and open WAV file
     char filepath[128];
-    snprintf(filepath, sizeof(filepath), "%s/%s", MOUNT_POINT, WAV_FILENAME); // Now MOUNT_POINT is defined
+    snprintf(filepath, sizeof(filepath), "%s/%s", MOUNT_POINT, WAV_FILENAME); 
     filepath[sizeof(filepath)-1] = '\0';
 
     fs_file_t_init(&wav_file);
@@ -153,9 +138,8 @@ int main(void)
         fs_unmount(&mp);
         return rc;
     }
-    LOG_INF("Opened WAV file: %s", filepath);
+    LOG_INF("WAV file: %s", filepath);
 
-    // 3. Read and Validate Base WAV Header
     ssize_t bytes_read = fs_read(&wav_file, &wav_header_base, sizeof(WavHeaderBase));
     if (bytes_read < sizeof(WavHeaderBase)) {
         LOG_ERR("Failed to read WAV header base: read %zd bytes, expected %zu. Error: %d",
@@ -165,7 +149,7 @@ int main(void)
         return (bytes_read < 0) ? bytes_read : -EIO;
     }
 
-    wav_header_base.chunkSize = sys_le32_to_cpu(wav_header_base.chunkSize);
+    wav_header_base.chunkSize = sys_le32_to_cpu(wav_header_base.chunkSize);     // converting to host endian for portability
     wav_header_base.fmtChunkSize = sys_le32_to_cpu(wav_header_base.fmtChunkSize);
     wav_header_base.audioFormat = sys_le16_to_cpu(wav_header_base.audioFormat);
     wav_header_base.numChannels = sys_le16_to_cpu(wav_header_base.numChannels);
@@ -208,8 +192,7 @@ int main(void)
     LOG_INF("WAV Info: %"PRIu32" Hz, %"PRIu16"-bit, %"PRIu16" channels",
             wav_sample_rate, wav_bits_per_sample, wav_num_channels);
 
-    // 4. Find the "data" chunk
-    if (wav_header_base.fmtChunkSize > 16) { // Standard PCM fmt chunk is 16 bytes
+    if (wav_header_base.fmtChunkSize > 16) { 
         rc = fs_seek(&wav_file, wav_header_base.fmtChunkSize - 16, FS_SEEK_CUR);
         if (rc < 0) {
             LOG_ERR("Failed to seek past extra fmt data: %d", rc);
@@ -264,7 +247,6 @@ int main(void)
         return -EINVAL;
     }
 
-    // 5. Configure I2S
     i2s_cfg.word_size = wav_bits_per_sample;
     i2s_cfg.channels = wav_num_channels;
     i2s_cfg.format = I2S_FMT_DATA_FORMAT_I2S;
@@ -294,12 +276,11 @@ int main(void)
     LOG_INF("I2S configured: %"PRIu32" Hz, %u-bit, %u channels, block_size %zu bytes",
             i2s_cfg.frame_clk_freq, i2s_cfg.word_size, i2s_cfg.channels, i2s_cfg.block_size);
 
-    // 6. Playback Loop
     void *tx_mem_block;
     uint32_t total_bytes_played = 0;
     bool i2s_started = false;
 
-    LOG_INF("Starting playback...");
+    LOG_INF("Playback");
 
     while (total_bytes_played < wav_data_chunk_size) {
         rc = k_mem_slab_alloc(&tx_0_mem_slab, &tx_mem_block, K_SECONDS(1));
@@ -316,13 +297,13 @@ int main(void)
             k_mem_slab_free(&tx_0_mem_slab, tx_mem_block);
             break;
         }
-        if (bytes_read == 0 && bytes_to_read_this_chunk > 0) { // End of file but expected more
+        if (bytes_read == 0 && bytes_to_read_this_chunk > 0) { 
             LOG_INF("End of WAV data chunk reached unexpectedly or file truncated.");
             k_mem_slab_free(&tx_0_mem_slab, tx_mem_block);
             break;
         }
-        if (bytes_read == 0 && bytes_to_read_this_chunk == 0) { // Successfully read everything
-             k_mem_slab_free(&tx_0_mem_slab, tx_mem_block); // Free the last allocated block if it won't be used
+        if (bytes_read == 0 && bytes_to_read_this_chunk == 0) { 
+             k_mem_slab_free(&tx_0_mem_slab, tx_mem_block); 
              break;
         }
 
@@ -342,7 +323,6 @@ int main(void)
             rc = i2s_trigger(dev_i2s, I2S_DIR_TX, I2S_TRIGGER_START);
             if (rc < 0) {
                 LOG_ERR("Failed to trigger I2S START: %d", rc);
-                // Block is already written to I2S queue, driver should free it.
                 break;
             }
             i2s_started = true;
@@ -351,32 +331,26 @@ int main(void)
         total_bytes_played += bytes_read;
     }
 
-    // 7. Cleanup and Drain
     if (i2s_started) {
-        LOG_INF("Draining I2S TX queue (waiting for all samples to play)...");
+        LOG_INF("Draining I2S TX queue");
         rc = i2s_trigger(dev_i2s, I2S_DIR_TX, I2S_TRIGGER_DRAIN);
         if (rc < 0) {
             LOG_ERR("Failed to DRAIN I2S TX: %d", rc);
         } else {
             LOG_INF("I2S DRAIN complete.");
         }
-    } else if (total_bytes_played > 0) { // Data was written but I2S trigger START failed
-        LOG_WRN("I2S START trigger failed, attempting DRAIN to clear queue.");
-         rc = i2s_trigger(dev_i2s, I2S_DIR_TX, I2S_TRIGGER_DRAIN); // Attempt to clear
+    } else if (total_bytes_played > 0) { 
+        LOG_WRN("I2S START trigger failed");
+         rc = i2s_trigger(dev_i2s, I2S_DIR_TX, I2S_TRIGGER_DRAIN); 
         if (rc < 0) LOG_ERR("Post-failure DRAIN I2S TX also failed: %d", rc);
     }
      else {
-         LOG_INF("I2S was not started or no data written, no need to drain.");
+         LOG_INF("I2S was not started or no data written");
     }
 
     fs_close(&wav_file);
     LOG_INF("Closed WAV file.");
 
-    // rc = fs_unmount(&mp); // Optional
-    // if (rc < 0) LOG_ERR("Failed to unmount SD: %d", rc);
-
-    LOG_INF("Playback finished. Total audio bytes processed: %"PRIu32, total_bytes_played);
-    LOG_INF("Entering idle loop.");
     while (1) {
         k_sleep(K_SECONDS(5));
     }
