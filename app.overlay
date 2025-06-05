@@ -1,7 +1,6 @@
 &spi4 {
 	status = "okay";
-	
-	 = <&gpio0 25 GPIO_ACTIVE_LOW>;
+	cs-gpios = <&gpio0 25 GPIO_ACTIVE_LOW>;
 	pinctrl-0 = <&spi4_default>;
 	sdhc0: sdhc@0 {
 			compatible = "zephyr,sdhc-spi-slot";
@@ -87,5 +86,4 @@
         };
     };
 };
-
 
